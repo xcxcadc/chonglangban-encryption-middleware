@@ -49,12 +49,15 @@ func Load() (Config, error) {
 	}
 
 	key := env("AES_KEY", "")
-	if len(key) != 16 || !isHex(key) {
-		return Config{}, errors.New("AES_KEY must be exactly 16 hexadecimal characters")
-	}
 	protocol := strings.ToLower(env("ENCRYPTION_PROTOCOL", "auto"))
 	if protocol != "auto" && protocol != "legacy" && protocol != "aead" {
 		return Config{}, errors.New("ENCRYPTION_PROTOCOL must be auto, legacy, or aead")
+	}
+	if protocol != "aead" && (len(key) != 16 || !isHex(key)) {
+		return Config{}, errors.New("AES_KEY must be exactly 16 hexadecimal characters for legacy or auto mode")
+	}
+	if protocol == "aead" && key != "" && (len(key) != 16 || !isHex(key)) {
+		return Config{}, errors.New("AES_KEY must be exactly 16 hexadecimal characters when provided")
 	}
 	aeadKey := env("AEAD_KEY", "")
 	if aeadKey != "" && (len(aeadKey) != 64 || !isHex(aeadKey)) {

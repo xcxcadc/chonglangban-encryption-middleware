@@ -43,7 +43,7 @@ AEAD_KEY=64位十六进制随机密钥
 ALLOW_PLAIN_SUBSCRIPTIONS=false
 ```
 
-v2 前端配置使用 `API_MIDDLEWARE_PROTOCOL: 'aead'` 和同一份 `API_MIDDLEWARE_AEAD_KEY`。如果设置为 `auto`，中间件和前端可以在迁移期间同时处理 v1 与 v2；不要在生产环境把旧的明文订阅作为长期方案。
+v2 前端配置使用 `API_MIDDLEWARE_PROTOCOL: 'aead'` 和同一份 `API_MIDDLEWARE_AEAD_KEY`。纯 v2 模式可以不填写 `AES_KEY`；如果设置为 `auto`，则仍需保留有效的 v1 `AES_KEY`，中间件和前端可以在迁移期间同时处理 v1 与 v2。不要在生产环境把旧的明文订阅作为长期方案。
 
 前端配置要对应：
 
