@@ -56,6 +56,39 @@ func TestEncryptedRequestReachesV2BoardPath(t *testing.T) {
 	}
 }
 
+func TestAEADRequestReachesV2BoardPathWithoutXIV(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/user/info" || r.URL.RawQuery != "view=full" {
+			t.Errorf("backend received %s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		_, _ = io.WriteString(w, `{"data":{"ok":true}}`)
+	}))
+	defer backend.Close()
+	backendURL, _ := url.Parse(backend.URL)
+	key := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	cfg := config.Config{
+		BackendAPIURL:      backendURL,
+		AEADKey:            key,
+		EncryptionProtocol: "aead",
+		PathPrefixes:       []string{"/clb/clb"},
+		APIPrefix:          "/api/v1",
+		AllowedOrigins:     []string{"*"},
+		MaxBodyBytes:       1024 * 1024,
+		RequestTimeout:     5 * time.Second,
+	}
+	h := NewHandler(cfg)
+	token, err := crypto.EncodeAEADPath("/user/info?view=full", key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/clb/clb/"+token, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"ok":true`) {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestPaymentNotifyCanBypassEncryptionWhenWhitelisted(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/guest/payment/notify/Stripe/demo" {
@@ -95,6 +128,39 @@ func TestPlainV2BoardSubscriptionCanUseItsOwnPath(t *testing.T) {
 	}
 	h := NewHandler(cfg)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/client/subscribe?token=demo", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAEADSubscriptionCanBeEncrypted(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/client/subscribe" || r.URL.Query().Get("token") != "demo" {
+			t.Errorf("backend received %s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+	backendURL, _ := url.Parse(backend.URL)
+	key := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	cfg := config.Config{
+		BackendAPIURL:          backendURL,
+		AEADKey:                key,
+		EncryptionProtocol:     "aead",
+		PathPrefixes:           []string{"/clb/clb"},
+		PlainSubscriptionPaths: []string{"/api/v1/client/subscribe"},
+		AllowedOrigins:         []string{"*"},
+		MaxBodyBytes:           1024 * 1024,
+		RequestTimeout:         5 * time.Second,
+	}
+	h := NewHandler(cfg)
+	token, err := crypto.EncodeAEADPath("/api/v1/client/subscribe?token=demo", key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/clb/clb/"+token, nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

@@ -43,3 +43,32 @@ func TestDecryptsKnownEzCompatibleVector(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+func TestAEADPathRoundTrip(t *testing.T) {
+	key := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	plain := "/api/v1/client/subscribe?token=sample-123"
+
+	encoded, err := EncodeAEADPath(plain, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) < 4 || encoded[:3] != "v2." {
+		t.Fatalf("unexpected AEAD prefix: %q", encoded[:3])
+	}
+	got, err := DecryptAEADPath(encoded, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != plain {
+		t.Fatalf("got %q, want %q", got, plain)
+	}
+
+	last := encoded[len(encoded)-1]
+	changed := encoded[:len(encoded)-1] + "A"
+	if changed[len(changed)-1] == last {
+		changed = encoded[:len(encoded)-1] + "B"
+	}
+	if _, err := DecryptAEADPath(changed, key); err == nil {
+		t.Fatal("expected tampered AEAD payload to be rejected")
+	}
+}

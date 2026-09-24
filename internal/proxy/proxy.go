@@ -69,18 +69,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	iv := r.Header.Get("X-IV")
-	if !validIV(iv) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid or missing X-IV"})
-		return
-	}
 	segment := strings.TrimPrefix(path, "/")
 	if segment == "" || strings.Contains(segment, "/") || len(segment) > 32768 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid encrypted path"})
 		return
 	}
+	iv := r.Header.Get("X-IV")
+	if !strings.HasPrefix(segment, "v2.") && !validIV(iv) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid or missing X-IV"})
+		return
+	}
 
-	logical, err := crypto.DecryptPath(segment, h.Config.AESKey, iv)
+	logical, err := h.decryptPath(segment, iv)
 	if err != nil {
 		if h.Config.DebugMode {
 			log.Printf("decrypt failed: %v", err)
@@ -96,6 +96,22 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.forwardTarget(w, r, target)
 }
 
+func (h *Handler) decryptPath(segment, iv string) (string, error) {
+	if strings.HasPrefix(segment, "v2.") {
+		if h.Config.EncryptionProtocol == "legacy" || h.Config.AEADKey == "" {
+			return "", fmt.Errorf("AEAD protocol is not enabled")
+		}
+		return crypto.DecryptAEADPath(segment, h.Config.AEADKey)
+	}
+	if h.Config.EncryptionProtocol == "aead" {
+		return "", fmt.Errorf("AEAD protocol is required")
+	}
+	if !validIV(iv) {
+		return "", fmt.Errorf("invalid or missing X-IV")
+	}
+	return crypto.DecryptPath(segment, h.Config.AESKey, iv)
+}
+
 func (h *Handler) targetForLogicalPath(value string) (*url.URL, error) {
 	logical, err := url.ParseRequestURI(value)
 	if err != nil || logical.IsAbs() || logical.Host != "" || logical.Fragment != "" || !strings.HasPrefix(logical.Path, "/") {
@@ -105,7 +121,7 @@ func (h *Handler) targetForLogicalPath(value string) (*url.URL, error) {
 		return nil, fmt.Errorf("invalid logical path")
 	}
 	path := logical.Path
-	if !h.isSubscriptionPath(path) {
+	if !h.isSubscriptionPath(path) && !h.Config.PlainSubscriptionAllowed(path) {
 		path = joinPath(h.Config.APIPrefix, path)
 	}
 	return h.backendTarget(path, logical.RawQuery), nil

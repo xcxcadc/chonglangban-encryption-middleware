@@ -3,12 +3,16 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 )
+
+const aeadAssociatedData = "chonglangban:v2:path"
 
 // DecryptPath decodes the same envelope emitted by the Chonglangban frontend:
 // encodeURIComponent(btoa(AES-CBC-PKCS7(plainPath))).
@@ -37,6 +41,63 @@ func EncodePath(plainPath string, key string, iv string) (string, error) {
 	ciphertext := base64.StdEncoding.EncodeToString(inner)
 	outer := base64.StdEncoding.EncodeToString([]byte(ciphertext))
 	return url.PathEscape(outer), nil
+}
+
+// DecryptAEADPath 解密 v2 协议路径。
+// 格式为 v2.<base64url(nonce || ciphertext || tag)>，使用 AES-256-GCM。
+// nonce 随密文一起传输，不能复用；GCM tag 会同时验证路径内容是否被篡改。
+func DecryptAEADPath(encoded string, keyHex string) (string, error) {
+	if !strings.HasPrefix(encoded, "v2.") {
+		return "", errors.New("unsupported AEAD version")
+	}
+	key, err := hex.DecodeString(keyHex)
+	if err != nil || len(key) != 32 {
+		return "", errors.New("AEAD_KEY must be 64 hexadecimal characters")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(encoded, "v2."))
+	if err != nil {
+		return "", errors.New("invalid AEAD payload")
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	if len(payload) <= aead.NonceSize()+aead.Overhead() {
+		return "", errors.New("AEAD payload is too short")
+	}
+	nonce := payload[:aead.NonceSize()]
+	plaintext, err := aead.Open(nil, nonce, payload[aead.NonceSize():], []byte(aeadAssociatedData))
+	if err != nil {
+		return "", errors.New("AEAD authentication failed")
+	}
+	return string(plaintext), nil
+}
+
+// EncodeAEADPath 生成 v2 协议路径，供集成测试和服务端工具使用。
+func EncodeAEADPath(plainPath string, keyHex string) (string, error) {
+	key, err := hex.DecodeString(keyHex)
+	if err != nil || len(key) != 32 {
+		return "", errors.New("AEAD_KEY must be 64 hexadecimal characters")
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return "", fmt.Errorf("generate AEAD nonce: %w", err)
+	}
+	ciphertext := aead.Seal(nil, nonce, []byte(plainPath), []byte(aeadAssociatedData))
+	payload := append(nonce, ciphertext...)
+	return "v2." + base64.RawURLEncoding.EncodeToString(payload), nil
 }
 
 func decodeBase64(value string) ([]byte, error) {

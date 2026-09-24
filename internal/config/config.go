@@ -16,6 +16,8 @@ type Config struct {
 	ServiceLabel              string
 	BackendAPIURL             *url.URL
 	AESKey                    string
+	AEADKey                   string
+	EncryptionProtocol        string
 	PathPrefix                string
 	PathPrefixes              []string
 	APIPrefix                 string
@@ -50,6 +52,17 @@ func Load() (Config, error) {
 	if len(key) != 16 || !isHex(key) {
 		return Config{}, errors.New("AES_KEY must be exactly 16 hexadecimal characters")
 	}
+	protocol := strings.ToLower(env("ENCRYPTION_PROTOCOL", "auto"))
+	if protocol != "auto" && protocol != "legacy" && protocol != "aead" {
+		return Config{}, errors.New("ENCRYPTION_PROTOCOL must be auto, legacy, or aead")
+	}
+	aeadKey := env("AEAD_KEY", "")
+	if aeadKey != "" && (len(aeadKey) != 64 || !isHex(aeadKey)) {
+		return Config{}, errors.New("AEAD_KEY must be exactly 64 hexadecimal characters")
+	}
+	if protocol == "aead" && aeadKey == "" {
+		return Config{}, errors.New("AEAD_KEY is required when ENCRYPTION_PROTOCOL=aead")
+	}
 
 	timeout, err := time.ParseDuration(env("REQUEST_TIMEOUT", "20000") + "ms")
 	if err != nil || timeout < time.Second {
@@ -71,6 +84,8 @@ func Load() (Config, error) {
 		ServiceLabel:              env("SERVICE_LABEL", "chonglangban-encryption-middleware"),
 		BackendAPIURL:             backend,
 		AESKey:                    key,
+		AEADKey:                   aeadKey,
+		EncryptionProtocol:        protocol,
 		PathPrefix:                firstOrEmpty(pathPrefixes),
 		PathPrefixes:              pathPrefixes,
 		APIPrefix:                 normalizePrefix(env("API_PREFIX", "/api/v1")),
@@ -79,7 +94,7 @@ func Load() (Config, error) {
 		PlainSubscriptionPaths:    csv(env("PLAIN_SUBSCRIPTION_PATHS", "/api/v1/client/subscribe")),
 		AllowedOrigins:            csv(env("ALLOWED_ORIGINS", "*")),
 		AllowedPaymentNotifyPaths: csv(paymentPaths),
-		AllowPlainSubscriptions:   boolEnv("ALLOW_PLAIN_SUBSCRIPTIONS", true),
+		AllowPlainSubscriptions:   boolEnv("ALLOW_PLAIN_SUBSCRIPTIONS", false),
 		RequestTimeout:            timeout,
 		MaxBodyBytes:              maxBody,
 		EnableLogging:             boolEnv("ENABLE_LOGGING", false),
