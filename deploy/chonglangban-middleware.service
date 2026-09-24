@@ -1,0 +1,22 @@
+[Unit]
+Description=Chonglangban Encryption Middleware
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/chonglangban-middleware
+ExecStart=/opt/chonglangban-middleware/chonglangban-middleware
+Restart=on-failure
+RestartSec=3
+User=www-data
+Group=www-data
+EnvironmentFile=/opt/chonglangban-middleware/.env
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/chonglangban-middleware
+
+[Install]
+WantedBy=multi-user.target
