@@ -12,6 +12,8 @@ BACKEND_API_URL=https://panel.example.com
 
 这里填写面板根地址，不要附加 `/api/v1`、查询参数或片段。中间件本身建议放在 HTTPS 反向代理后面，主题中的 `API_MIDDLEWARE_URL` 使用 HTTPS 地址。
 
+主题端地址配置要填写完整的 Origin，例如 `https://middleware.example.com`。不要省略协议写成 `middleware.example.com`，也不要把 `/clb/clb` 拼进 Origin；`/clb/clb` 应单独填写到主题的 `API_MIDDLEWARE_PATH`，并与中间件的 `PATH_PREFIX` 一致。省略协议会让浏览器把地址当成前端站点下的相对路径，表现为配置加载失败或请求 404。
+
 ## 2. 下载并安装运行包
 
 从 GitHub Releases 下载与你服务器 CPU 对应的运行包或二进制文件。以 amd64 Linux 为例：

@@ -56,6 +56,8 @@ API_MIDDLEWARE_PROTOCOL: 'aead',
 API_MIDDLEWARE_AEAD_KEY: '与 AEAD_KEY 相同的64位十六进制密钥',
 ```
 
+注意：`API_MIDDLEWARE_URL` 必须填写完整的 Origin，包含 `https://` 或 `http://`，例如 `https://middleware.example.com`；不要只填写 `middleware.example.com`，也不要把 `/clb/clb` 拼到这个值后面。路由前缀请单独配置在 `API_MIDDLEWARE_PATH`，并与服务端的 `PATH_PREFIX` 保持一致。这样可以避免浏览器把中间件域名误解析为当前前端站点下的相对路径。
+
 `AES_KEY` 是 16 个 ASCII 十六进制字符。为了兼容当前 Chonglangban 前端，密钥按 UTF-8 字符串使用，不进行十六进制字节解码。
 
 ### 订阅地址与加密订阅

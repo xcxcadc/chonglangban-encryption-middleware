@@ -31,6 +31,10 @@ v2 不需要 `X-IV`，GCM 认证标签会在解密时验证路径没有被篡改
 
 ## 协议配置
 
+### 前端地址格式
+
+主题的 `API_MIDDLEWARE_URL` 必须是完整的 Origin，包含 `https://` 或 `http://`；例如 `https://middleware.example.com`。不要只填域名，也不要把路由前缀拼在 Origin 后面。`API_MIDDLEWARE_PATH` 单独填写 `/clb/clb`，并与下面服务端的 `PATH_PREFIX` 完全一致。Origin 缺少协议时，浏览器可能把中间件请求解析成当前前端域名下的相对路径，从而出现配置加载失败或 404。
+
 ```dotenv
 # auto=同时兼容 v1/v2；legacy=仅 v1；aead=仅 v2
 ENCRYPTION_PROTOCOL=auto
