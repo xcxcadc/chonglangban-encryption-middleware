@@ -15,6 +15,7 @@
 - 支付回调支持配置白名单，白名单路径可以不带 `X-IV` 直接转发。
 - 正确处理带凭据的 CORS，支持预检请求。
 - 健康检查 `/healthz`、请求体大小限制、连接复用、超时和优雅退出。
+- 请求日志可记录 `legacy-v1`、`aead-v2`、`plain-subscription` 或 `payment-allowlist`、状态码和耗时，不记录密钥、Token 或解密后的真实路径。
 - 纯 Go 标准库实现，提供 Linux amd64/arm64 构建脚本。
 
 ## 配置
