@@ -37,21 +37,20 @@ func NewHandler(cfg config.Config) *Handler {
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.applyCORS(w, r)
+	if origin := r.Header.Get("Origin"); origin != "" && !h.Config.OriginAllowed(origin) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "origin not allowed"})
+		return
+	}
 	if r.Method == http.MethodOptions {
-		if r.Header.Get("Origin") != "" && !h.Config.OriginAllowed(r.Header.Get("Origin")) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "origin not allowed"})
-			return
-		}
 		w.WriteHeader(http.StatusNoContent)
 		return
+	}
+	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, h.Config.MaxBodyBytes)
 	}
 	if h.Config.AllowPlainSubscriptions && h.Config.PlainSubscriptionAllowed(r.URL.Path) {
 		h.forward(w, r, r.URL.Path, r.URL.RawQuery)
 		return
-	}
-
-	if r.Body != nil {
-		r.Body = http.MaxBytesReader(w, r.Body, h.Config.MaxBodyBytes)
 	}
 	path, ok := h.Config.RemoveEncryptedPrefix(r.URL.Path)
 	if !ok {
@@ -114,10 +113,10 @@ func (h *Handler) decryptPath(segment, iv string) (string, error) {
 
 func (h *Handler) targetForLogicalPath(value string) (*url.URL, error) {
 	logical, err := url.ParseRequestURI(value)
-	if err != nil || logical.IsAbs() || logical.Host != "" || logical.Fragment != "" || !strings.HasPrefix(logical.Path, "/") {
+	if err != nil || logical.IsAbs() || logical.Host != "" || logical.Fragment != "" || !strings.HasPrefix(logical.Path, "/") || strings.HasPrefix(logical.Path, "//") {
 		return nil, fmt.Errorf("invalid logical path")
 	}
-	if strings.ContainsAny(logical.Path, "\x00\r\n") {
+	if strings.ContainsAny(logical.Path, "\x00\r\n\\") || hasTraversalSegment(logical.Path) {
 		return nil, fmt.Errorf("invalid logical path")
 	}
 	path := logical.Path
@@ -125,6 +124,15 @@ func (h *Handler) targetForLogicalPath(value string) (*url.URL, error) {
 		path = joinPath(h.Config.APIPrefix, path)
 	}
 	return h.backendTarget(path, logical.RawQuery), nil
+}
+
+func hasTraversalSegment(value string) bool {
+	for _, segment := range strings.Split(value, "/") {
+		if segment == "." || segment == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) isSubscriptionPath(path string) bool {

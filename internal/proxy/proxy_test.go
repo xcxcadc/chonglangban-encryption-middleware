@@ -135,6 +135,53 @@ func TestPlainV2BoardSubscriptionCanUseItsOwnPath(t *testing.T) {
 	}
 }
 
+func TestRejectsUnauthorizedOriginForNonPreflightRequests(t *testing.T) {
+	cfg := config.Config{
+		PathPrefixes:   []string{"/clb/clb"},
+		AllowedOrigins: []string{"https://panel.example.com"},
+		MaxBodyBytes:   1024 * 1024,
+		RequestTimeout: 5 * time.Second,
+	}
+	h := NewHandler(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/clb/clb/not-a-valid-payload", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRejectsTraversalInDecryptedLogicalPath(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("backend should not receive traversal path: %s", r.URL.Path)
+	}))
+	defer backend.Close()
+	backendURL, _ := url.Parse(backend.URL)
+	key := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	cfg := config.Config{
+		BackendAPIURL:      backendURL,
+		AEADKey:            key,
+		EncryptionProtocol: "aead",
+		PathPrefixes:       []string{"/clb/clb"},
+		APIPrefix:          "/api/v1",
+		AllowedOrigins:     []string{"*"},
+		MaxBodyBytes:       1024 * 1024,
+		RequestTimeout:     5 * time.Second,
+	}
+	h := NewHandler(cfg)
+	token, err := crypto.EncodeAEADPath("/../admin", key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/clb/clb/"+token, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestAEADSubscriptionCanBeEncrypted(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/client/subscribe" || r.URL.Query().Get("token") != "demo" {

@@ -2,7 +2,7 @@
 
 这是为 Chonglangban 前端和 V2Board 兼容面板单独编写的 API 加密转发服务，仓库内的说明、配置和部署示例均使用中文。
 
-它兼容当前主题和 EZ 的 v1 请求协议：前端使用 16 位十六进制字符作为 AES 密钥和 IV，使用 AES-CBC/PKCS7 加密逻辑路径，再进行双层 Base64 编码后放入 URL。与此同时，它提供 v2 AES-256-GCM 认证加密协议，密文自带随机 nonce 和认证标签，可以让普通 API 和订阅链接都不携带明文路径。协议细节和可变路径见 [协议与配置](docs/protocol-and-config.zh-CN.md)。
+它兼容当前主题和 EZ 的 v1 请求协议：前端使用 16 位十六进制字符作为 AES 密钥和 IV，使用 AES-CBC/PKCS7 加密逻辑路径，再进行双层 Base64 编码后放入 URL。与此同时，它提供 v2 AES-256-GCM 认证加密协议，密文自带随机 nonce 和认证标签，可以让普通 API 和订阅链接都不携带明文路径。协议细节和可变路径见 [协议与配置](docs/protocol-and-config.zh-CN.md)，完整部署步骤见 [安装、配置与使用](docs/install-and-usage.zh-CN.md)。
 
 ## 功能
 
